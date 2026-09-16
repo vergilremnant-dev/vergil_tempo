@@ -394,7 +394,7 @@ export default function AdminAttendance() {
                             )}
                           </td>
                           <td className="px-6 py-3.5 font-bold text-white">
-                            {log.clockOut ? `${log.hours.toFixed(2)} hrs` : 'In Progress'}
+                            {log.hours !== null && log.hours !== undefined ? `${Number(log.hours).toFixed(2)} hrs` : (log.clockOut ? '--' : 'In Progress')}
                           </td>
                           <td className="px-6 py-3.5">
                             <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded-lg border uppercase tracking-wider whitespace-nowrap inline-block ${

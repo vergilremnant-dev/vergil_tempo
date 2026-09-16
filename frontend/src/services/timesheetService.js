@@ -993,7 +993,8 @@ export const timesheetService = {
         } else {
           const log = logMap[dateStrIso];
           if (log) {
-            pdfContent += `${dateStr} | ${dayName} | ${log.clockIn || '-'} | ${log.clockOut || '-'} | ${log.hours.toFixed(2)} | ${candidate.name} | ${candidate.clientCompany || 'N/A'} | Present\n`;
+            const hoursFormatted = log.hours !== null && log.hours !== undefined ? Number(log.hours).toFixed(2) : '0.00';
+            pdfContent += `${dateStr} | ${dayName} | ${log.clockIn || '-'} | ${log.clockOut || '-'} | ${hoursFormatted} | ${candidate.name} | ${candidate.clientCompany || 'N/A'} | Present\n`;
           } else {
             pdfContent += `${dateStr} | ${dayName} | - | - | - | ${candidate.name} | ${candidate.clientCompany || 'N/A'} | ABSENT\n`;
           }
