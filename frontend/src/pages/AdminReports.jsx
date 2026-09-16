@@ -3,6 +3,7 @@ import { FileText, Download, FileDown, Calendar, RotateCw } from 'lucide-react';
 import { timesheetService } from '../services/timesheetService';
 import MonthlyDownloadModal from '../components/admin/MonthlyDownloadModal';
 import HolidayManagementModal from '../components/admin/HolidayManagementModal';
+import WorkforceSummaryTable from '../components/admin/WorkforceSummaryTable';
 import Toast from '../components/common/Toast';
 
 export default function AdminReports() {
@@ -112,6 +113,9 @@ export default function AdminReports() {
         </div>
 
       </div>
+
+      {/* Workforce Audit & Attendance Summary Engine */}
+      <WorkforceSummaryTable setToast={setToast} />
 
       {/* Modals Hooks */}
       <MonthlyDownloadModal 

@@ -1097,7 +1097,103 @@ export const timesheetService = {
       triggerSync();
       return response.data;
     }
-  }
+  },
+  getWorkforceSummary: async (year, month, clientId = 'ALL') => {
+    if (USE_MOCK_API) {
+      // Mock summary fallback
+      return {
+        year,
+        month,
+        totalWorkingDays: 21,
+        totalEmployees: 2,
+        summaries: [
+          {
+            userId: 'emp-1',
+            name: 'Sarah Jenkins',
+            username: 'sarah.jenkins',
+            clientCompany: 'Microsoft',
+            hourlyRate: 45.0,
+            totalWorkingDays: 21,
+            presentDays: 20,
+            leaveDays: 1,
+            absentDays: 0,
+            totalHours: 160.0,
+            billableAmount: 7200.0,
+            lateCount: 1,
+            earlyLeaveCount: 0,
+            attendanceScore: 100,
+          },
+          {
+            userId: 'emp-2',
+            name: 'David Ross',
+            username: 'david.ross',
+            clientCompany: 'Google',
+            hourlyRate: 50.0,
+            totalWorkingDays: 21,
+            presentDays: 19,
+            leaveDays: 0,
+            absentDays: 2,
+            totalHours: 152.0,
+            billableAmount: 7600.0,
+            lateCount: 0,
+            earlyLeaveCount: 1,
+            attendanceScore: 90,
+          },
+        ],
+      };
+    } else {
+      const response = await api.get('/reports/workforce-summary', {
+        params: { year, month, clientId },
+      });
+      return response.data;
+    }
+  },
+
+  exportWorkforceSummaryCSV: (data, yearMonth) => {
+    const headers = ['Employee Name', 'Username', 'Client MNC', 'Working Days', 'Present Days', 'Leave Days', 'Absent Days', 'Total Hours', 'Rate ($/hr)', 'Billable Total ($)', 'Late Count', 'Early Leave', 'Score (%)'];
+    let csvContent = headers.join(',') + '\n';
+
+    data.summaries.forEach((s) => {
+      const row = [
+        `"${s.name}"`,
+        `"${s.username}"`,
+        `"${s.clientCompany}"`,
+        s.totalWorkingDays,
+        s.presentDays,
+        s.leaveDays,
+        s.absentDays,
+        s.totalHours,
+        s.hourlyRate.toFixed(2),
+        s.billableAmount.toFixed(2),
+        s.lateCount,
+        s.earlyLeaveCount,
+        `${s.attendanceScore}%`,
+      ];
+      csvContent += row.join(',') + '\n';
+    });
+
+    triggerFileDownload(csvContent, `Vergil_Tempo_Workforce_Audit_${yearMonth}.csv`);
+  },
+
+  exportWorkforceSummaryPDF: (data, yearMonth) => {
+    let pdfText = `VERGIL TEMPO - WORKFORCE ATTENDANCE & AUDIT REPORT\n`;
+    pdfText += `Period: ${yearMonth} | Uniform Working Days: ${data.totalWorkingDays} Days | Total Staff: ${data.totalEmployees}\n`;
+    pdfText += `Generated At: ${new Date().toLocaleString()}\n`;
+    pdfText += `----------------------------------------------------------------------------------------------------\n\n`;
+
+    pdfText += `Employee Name | Client MNC | Working Days | Present | Leave | Absent | Total Hours | Billable ($) | Score\n`;
+    pdfText += `----------------------------------------------------------------------------------------------------\n`;
+
+    data.summaries.forEach((s) => {
+      pdfText += `${s.name} | ${s.clientCompany} | ${s.totalWorkingDays} | ${s.presentDays} | ${s.leaveDays} | ${s.absentDays} | ${s.totalHours} hrs | $${s.billableAmount.toFixed(2)} | ${s.attendanceScore}%\n`;
+    });
+
+    pdfText += `\n----------------------------------------------------------------------------------------------------\n`;
+    pdfText += `End of Report - Vergil Tempo Workforce Audit Engine\n`;
+
+    const blob = new Blob([pdfText], { type: 'text/plain;charset=utf-8' });
+    triggerBlobDownload(blob, `Vergil_Tempo_Workforce_Audit_${yearMonth}.txt`);
+  },
 };
 
 // Helpers to initiate downloads
