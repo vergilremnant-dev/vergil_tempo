@@ -37,11 +37,33 @@ export async function POST(req: NextRequest) {
     const serverDateStr = eventDate.toISOString().split("T")[0];
     const timesheetDateStr = timesheet.date.toISOString().split("T")[0];
 
-    // Enforce recovery clock-out for past-date active shifts
-    if (!recoveryClockOut && timesheetDateStr !== serverDateStr) {
-      return NextResponse.json({
-        error: "Your active shift is from a past date. Please use Attendance Recovery to clock out."
-      }, { status: 400 });
+    const activeSession = timesheet.attendance_sessions.find((s) => s.clock_out === null);
+    if (!activeSession) {
+      return NextResponse.json({ error: "No active session found" }, { status: 404 });
+    }
+
+    // Check for Night Shift Crossover (shift started PM previous day, ends AM today within 14 hrs)
+    let isNightShift = false;
+    if (timesheetDateStr !== serverDateStr) {
+      const startLdt = new Date(timesheet.date);
+      startLdt.setUTCHours(
+        activeSession.clock_in.getUTCHours(),
+        activeSession.clock_in.getUTCMinutes(),
+        activeSession.clock_in.getUTCSeconds(),
+        0
+      );
+      const currentLdt = new Date(eventDate);
+      currentLdt.setUTCHours(hour, minute, second, 0);
+
+      const elapsedHours = (currentLdt.getTime() - startLdt.getTime()) / (1000 * 60 * 60);
+
+      if (elapsedHours > 0 && elapsedHours <= 14) {
+        isNightShift = true;
+      } else if (!recoveryClockOut) {
+        return NextResponse.json({
+          error: "Your active shift is from a past date. Please use Attendance Recovery to clock out."
+        }, { status: 400 });
+      }
     }
 
     let clockOutTime = serverClockOutTime;
@@ -49,6 +71,11 @@ export async function POST(req: NextRequest) {
     let minuteVal = minute;
     let secondVal = second;
     let finalNotes = notes || null;
+
+    if (isNightShift) {
+      const nightFlag = "[Type: NIGHT_SHIFT_CROSSOVER]";
+      finalNotes = finalNotes ? `${finalNotes} ${nightFlag}` : nightFlag;
+    }
 
     if (recoveryClockOut) {
       if (!settings.attendance_recovery_enabled) {
@@ -108,11 +135,6 @@ export async function POST(req: NextRequest) {
       finalNotes = finalNotes ? `${finalNotes} ${auditStr}` : auditStr;
     }
 
-    const activeSession = timesheet.attendance_sessions.find((s) => s.clock_out === null);
-    if (!activeSession) {
-      return NextResponse.json({ error: "No active session found" }, { status: 404 });
-    }
-
     // Calculate working minutes and hours
     const startLdt = new Date(timesheet.date);
     startLdt.setUTCHours(
@@ -146,6 +168,26 @@ export async function POST(req: NextRequest) {
       timesheet.attendance_sessions
         .filter((s) => s.id !== activeSession.id && s.clock_out !== null)
         .reduce((sum, s) => sum + Number(s.hours || 0), 0) + decimalHours;
+
+    const maxShiftLimit = (settings as any).max_shift_hours || 14;
+    if (decimalHours > maxShiftLimit) {
+      const maxShiftFlag = `[Flagged: Shift Duration (${decimalHours} hrs) Exceeded Max ${maxShiftLimit} hrs Cap]`;
+      finalNotes = finalNotes ? `${finalNotes} ${maxShiftFlag}` : maxShiftFlag;
+    }
+
+    // Use Case 4: Early Departure Tagging
+    if (settings.office_end_time && !recoveryClockOut) {
+      const [endHour, endMin] = settings.office_end_time.split(":").map(Number);
+      const graceMin = settings.clock_out_grace_period || 0;
+      const endLimitMin = endHour * 60 + endMin - graceMin;
+      const clockOutTotalMin = hourVal * 60 + minuteVal;
+
+      if (clockOutTotalMin < endLimitMin) {
+        const earlyMins = (endHour * 60 + endMin) - clockOutTotalMin;
+        const earlyFlag = `[Status: EARLY_LEAVE (${earlyMins} mins early)]`;
+        finalNotes = finalNotes ? `${finalNotes} ${earlyFlag}` : earlyFlag;
+      }
+    }
 
     let updatedNotes = timesheet.notes;
     if (finalNotes && finalNotes.trim() !== "") {

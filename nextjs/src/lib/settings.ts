@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS = {
   recovery_deadline: "23:59",
   weekend_configuration: "Saturday,Sunday",
   timezone: "Asia/Kolkata",
+  max_shift_hours: 14,
 };
 
 export async function getCompanySettings() {

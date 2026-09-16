@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Reject clock-in if user is on approved leave today
+    // Check if user is on approved leave today
     const leave = await prisma.leaves.findFirst({
       where: {
         user_id: user.id,
@@ -52,11 +52,36 @@ export async function POST(req: NextRequest) {
         end_date: { gte: eventDate },
       },
     });
+
+    let halfDayShiftTag: string | undefined = undefined;
     if (leave) {
-      return NextResponse.json(
-        { error: `Today you are on approved leave (${leave.leave_type}). Clock-in is disabled.` },
-        { status: 403 }
-      );
+      const typeLower = leave.leave_type.toLowerCase();
+      const isHalfDayMorning = typeLower.includes("morning") || typeLower.includes("half_day_morning");
+      const isHalfDayAfternoon = typeLower.includes("afternoon") || typeLower.includes("half_day_afternoon");
+      const clockInHour = eventClockIn.getUTCHours();
+
+      if (isHalfDayMorning) {
+        if (clockInHour < 12) {
+          return NextResponse.json(
+            { error: "Today you are on approved Half-Day Morning leave. Morning clock-in is disabled." },
+            { status: 403 }
+          );
+        }
+        halfDayShiftTag = "[Shift: Half-Day Afternoon]";
+      } else if (isHalfDayAfternoon) {
+        if (clockInHour >= 13) {
+          return NextResponse.json(
+            { error: "Today you are on approved Half-Day Afternoon leave. Afternoon clock-in is disabled." },
+            { status: 403 }
+          );
+        }
+        halfDayShiftTag = "[Shift: Half-Day Morning]";
+      } else {
+        return NextResponse.json(
+          { error: `Today you are on approved leave (${leave.leave_type}). Clock-in is disabled.` },
+          { status: 403 }
+        );
+      }
     }
 
     const dbUser = await prisma.users.findUnique({
@@ -76,8 +101,37 @@ export async function POST(req: NextRequest) {
         clock_out: null,
       },
       orderBy: { date: "desc" },
+      include: {
+        attendance_sessions: { orderBy: { clock_in: "asc" } },
+      },
     });
     if (activeTimesheet) {
+      const activeSession = activeTimesheet.attendance_sessions.find((s) => s.clock_out === null);
+      if (activeSession) {
+        const { hour, minute, second } = getCurrentISTTime();
+        const startLdt = new Date(activeTimesheet.date);
+        startLdt.setUTCHours(
+          activeSession.clock_in.getUTCHours(),
+          activeSession.clock_in.getUTCMinutes(),
+          activeSession.clock_in.getUTCSeconds(),
+          0
+        );
+        const currentLdt = new Date(eventDate);
+        currentLdt.setUTCHours(hour, minute, second, 0);
+
+        const elapsedHours = (currentLdt.getTime() - startLdt.getTime()) / (1000 * 60 * 60);
+        const maxHours = (settings as any).max_shift_hours || 14;
+
+        if (elapsedHours > maxHours) {
+          const shiftDateStr = activeTimesheet.date.toISOString().split("T")[0];
+          return NextResponse.json(
+            {
+              error: `Your shift from ${shiftDateStr} exceeded the maximum limit of ${maxHours} hours. Please use Attendance Recovery to clock out first.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
       return NextResponse.json({ error: "Active shift already exists" }, { status: 400 });
     }
 
@@ -101,6 +155,23 @@ export async function POST(req: NextRequest) {
       );
       if (hasActiveSession) {
         return NextResponse.json({ error: "Active shift already exists" }, { status: 400 });
+      }
+
+      // Validate 2-minute cooldown buffer after recent clock-out
+      const completedSessions = existingTimesheet.attendance_sessions.filter(
+        (s) => s.clock_out !== null
+      );
+      if (completedSessions.length > 0) {
+        const lastClockOutMs = Math.max(
+          ...completedSessions.map((s) => s.clock_out!.getTime())
+        );
+        const cooldownBufferMs = 2 * 60 * 1000; // 2 minutes
+        if (eventClockIn.getTime() - lastClockOutMs < cooldownBufferMs) {
+          return NextResponse.json(
+            { error: "Please wait at least 2 minutes after clocking out before starting a new session." },
+            { status: 400 }
+          );
+        }
       }
 
       // Validate overlapping sessions
@@ -131,6 +202,27 @@ export async function POST(req: NextRequest) {
     } else {
       timesheetId = crypto.randomUUID();
 
+      // Calculate Punctuality for first clock-in of the day
+      let initialNotes: string | undefined = undefined;
+      if (settings.office_start_time) {
+        const [startHour, startMin] = settings.office_start_time.split(":").map(Number);
+        const graceMin = settings.clock_in_grace_period || 0;
+        const startLimitMin = startHour * 60 + startMin + graceMin;
+
+        const clockInHour = eventClockIn.getUTCHours();
+        const clockInMin = eventClockIn.getUTCMinutes();
+        const clockInTotalMin = clockInHour * 60 + clockInMin;
+
+        if (clockInTotalMin > startLimitMin) {
+          const lateMins = clockInTotalMin - (startHour * 60 + startMin);
+          initialNotes = `[Status: LATE (${lateMins} mins late)]`;
+        }
+      }
+
+      if (halfDayShiftTag) {
+        initialNotes = initialNotes ? `${initialNotes} ${halfDayShiftTag}` : halfDayShiftTag;
+      }
+
       await prisma.timesheets.create({
         data: {
           id: timesheetId,
@@ -139,6 +231,7 @@ export async function POST(req: NextRequest) {
           date: eventDate,
           clock_in: eventClockIn,
           clock_out: null,
+          notes: initialNotes,
           browser: browser || undefined,
           operating_system: operatingSystem || undefined,
           device_type: deviceType || undefined,
