@@ -93,6 +93,8 @@ export default function EditLogModal({ isOpen, logId, onClose, onSuccess, setToa
       return;
     }
 
+    const trimmedClientCompany = (clientCompany || '').trim();
+
     setSubmitting(true);
     try {
       const payload = {

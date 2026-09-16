@@ -56,6 +56,8 @@ export default function AdminManualEntry() {
       return;
     }
 
+    const trimmedClientCompany = (clientCompany || '').trim();
+
     setSubmitting(true);
     try {
       const payload = {
