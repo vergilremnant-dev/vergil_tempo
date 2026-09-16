@@ -34,6 +34,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         users: {
           select: {
             name: true,
+            username: true,
             clients: {
               select: {
                 name: true,
@@ -43,6 +44,26 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         },
       },
     });
+
+    // Feature #5: Dispatch Leave Status Email Alert
+    if (updated.users && updated.users.username && updated.users.username.includes("@")) {
+      const { sendEmail, generateLeaveStatusEmail } = await import("@/lib/email");
+      const startStr = updated.start_date.toISOString().split("T")[0];
+      const endStr = updated.end_date.toISOString().split("T")[0];
+      const emailHtml = generateLeaveStatusEmail(
+        updated.users.name,
+        updated.leave_type,
+        startStr,
+        endStr,
+        "APPROVED",
+        reason || updated.reason || undefined
+      );
+      sendEmail({
+        to: updated.users.username,
+        subject: `Leave Request Update (${updated.leave_type})`,
+        html: emailHtml,
+      }).catch((e) => console.error("Async email error:", e));
+    }
 
     return NextResponse.json({
       message: "Leave updated successfully",

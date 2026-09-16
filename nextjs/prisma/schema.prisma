@@ -58,14 +58,35 @@ model timesheets {
   operating_system    String?               @db.VarChar(50)
   device_type         String?               @db.VarChar(30)
   screen_resolution   String?               @db.VarChar(20)
-  attendance_sessions attendance_sessions[]
-  clients             clients               @relation(fields: [client_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users               users                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  attendance_sessions  attendance_sessions[]
+  timesheet_audit_logs timesheet_audit_logs[]
+  clients              clients                @relation(fields: [client_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                users                  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([user_id])
   @@index([client_id])
   @@index([date])
   @@index([user_id, date])
+}
+
+model timesheet_audit_logs {
+  id            String     @id @db.VarChar(36)
+  timesheet_id  String     @db.VarChar(36)
+  user_id       String     @db.VarChar(36)
+  modified_by   String     @db.VarChar(36)
+  action_type   String     @db.VarChar(20)
+  old_clock_in  DateTime?  @db.Time(6)
+  old_clock_out DateTime?  @db.Time(6)
+  old_hours     Decimal?   @db.Decimal(4, 2)
+  new_clock_in  DateTime?  @db.Time(6)
+  new_clock_out DateTime?  @db.Time(6)
+  new_hours     Decimal?   @db.Decimal(4, 2)
+  reason        String?    @db.VarChar(255)
+  created_at    DateTime?  @default(now()) @db.Timestamp(6)
+  timesheets    timesheets @relation(fields: [timesheet_id], references: [id], onDelete: Cascade)
+
+  @@index([timesheet_id])
+  @@index([user_id])
 }
 
 model users {

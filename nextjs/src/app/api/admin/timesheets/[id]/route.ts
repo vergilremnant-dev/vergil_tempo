@@ -8,6 +8,7 @@ import { recalculateTimesheetAggregates } from "@/lib/attendance";
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { user, response } = await checkAuth(req, ["ADMIN"]);
   if (response) return response;
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const { id } = await params;
@@ -178,6 +179,45 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     await recalculateTimesheetAggregates(id);
 
+    // Feature #4: Log Audit History Entry
+    await (prisma as any).timesheet_audit_logs.create({
+      data: {
+        id: crypto.randomUUID(),
+        timesheet_id: id,
+        user_id: timesheet.user_id,
+        modified_by: user.id,
+        action_type: "UPDATE",
+        old_clock_in: timesheet.clock_in,
+        old_clock_out: timesheet.clock_out,
+        old_hours: timesheet.hours,
+        new_clock_in: inTime,
+        new_clock_out: outTime,
+        new_hours: hours,
+        reason: notes || "Admin timesheet override",
+      },
+    });
+
+    // Feature #5: Dispatch Email Notification Alert
+    const targetUser = await prisma.users.findUnique({
+      where: { id: timesheet.user_id },
+    });
+    if (targetUser && targetUser.username.includes("@")) {
+      const { sendEmail, generateTimesheetOverrideEmail } = await import("@/lib/email");
+      const dateStr = dateVal.toISOString().split("T")[0];
+      const emailHtml = generateTimesheetOverrideEmail(
+        targetUser.name,
+        dateStr,
+        user.username || "Administrator",
+        "Updated timesheet clock times / hours",
+        notes || "Manual Admin Adjustment"
+      );
+      sendEmail({
+        to: targetUser.username,
+        subject: `Timesheet Update Alert (${dateStr})`,
+        html: emailHtml,
+      }).catch((e) => console.error("Async email error:", e));
+    }
+
     return NextResponse.json({ message: "Timesheet record updated" });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -188,9 +228,52 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { user, response } = await checkAuth(req, ["ADMIN"]);
   if (response) return response;
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const { id } = await params;
+
+    const existingTimesheet = await prisma.timesheets.findUnique({
+      where: { id },
+    });
+
+    if (existingTimesheet) {
+      // Feature #4: Log Audit Entry
+      await (prisma as any).timesheet_audit_logs.create({
+        data: {
+          id: crypto.randomUUID(),
+          timesheet_id: id,
+          user_id: existingTimesheet.user_id,
+          modified_by: user.id,
+          action_type: "DELETE",
+          old_clock_in: existingTimesheet.clock_in,
+          old_clock_out: existingTimesheet.clock_out,
+          old_hours: existingTimesheet.hours,
+          reason: "Timesheet record removed by administrator",
+        },
+      });
+
+      // Feature #5: Dispatch Email Notification Alert
+      const targetUser = await prisma.users.findUnique({
+        where: { id: existingTimesheet.user_id },
+      });
+      if (targetUser && targetUser.username.includes("@")) {
+        const { sendEmail, generateTimesheetOverrideEmail } = await import("@/lib/email");
+        const dateStr = existingTimesheet.date.toISOString().split("T")[0];
+        const emailHtml = generateTimesheetOverrideEmail(
+          targetUser.name,
+          dateStr,
+          user.username || "Administrator",
+          "Deleted timesheet entry",
+          "Timesheet entry was removed by administrator"
+        );
+        sendEmail({
+          to: targetUser.username,
+          subject: `Timesheet Record Removed (${dateStr})`,
+          html: emailHtml,
+        }).catch((e) => console.error("Async email error:", e));
+      }
+    }
     
     // Clean up associated attendance sessions first to prevent foreign key constraint violations
     await prisma.attendance_sessions.deleteMany({
