@@ -1099,7 +1099,7 @@ export const timesheetService = {
     }
   },
   getWorkforceSummary: async (year, month, clientId = 'ALL') => {
-    if (USE_MOCK_API) {
+    if (isMockMode()) {
       // Mock summary fallback
       return {
         year,
