@@ -1175,24 +1175,33 @@ export const timesheetService = {
     triggerFileDownload(csvContent, `Vergil_Tempo_Workforce_Audit_${yearMonth}.csv`);
   },
 
-  exportWorkforceSummaryPDF: (data, yearMonth) => {
-    let pdfText = `VERGIL TEMPO - WORKFORCE ATTENDANCE & AUDIT REPORT\n`;
-    pdfText += `Period: ${yearMonth} | Uniform Working Days: ${data.totalWorkingDays} Days | Total Staff: ${data.totalEmployees}\n`;
-    pdfText += `Generated At: ${new Date().toLocaleString()}\n`;
-    pdfText += `----------------------------------------------------------------------------------------------------\n\n`;
+  exportWorkforceSummaryPDF: async (data, yearMonth, clientId = 'ALL') => {
+    if (isMockMode()) {
+      let pdfText = `VERGIL TEMPO - WORKFORCE ATTENDANCE & AUDIT REPORT\n`;
+      pdfText += `Period: ${yearMonth} | Uniform Working Days: ${data.totalWorkingDays} Days | Total Staff: ${data.totalEmployees}\n`;
+      pdfText += `Generated At: ${new Date().toLocaleString()}\n`;
+      pdfText += `----------------------------------------------------------------------------------------------------\n\n`;
 
-    pdfText += `Employee Name | Client MNC | Working Days | Present | Leave | Absent | Total Hours | Billable ($) | Score\n`;
-    pdfText += `----------------------------------------------------------------------------------------------------\n`;
+      pdfText += `Employee Name | Client MNC | Working Days | Present | Leave | Absent | Total Hours | Billable ($) | Score\n`;
+      pdfText += `----------------------------------------------------------------------------------------------------\n`;
 
-    data.summaries.forEach((s) => {
-      pdfText += `${s.name} | ${s.clientCompany} | ${s.totalWorkingDays} | ${s.presentDays} | ${s.leaveDays} | ${s.absentDays} | ${s.totalHours} hrs | $${s.billableAmount.toFixed(2)} | ${s.attendanceScore}%\n`;
-    });
+      data.summaries.forEach((s) => {
+        pdfText += `${s.name} | ${s.clientCompany} | ${s.totalWorkingDays} | ${s.presentDays} | ${s.leaveDays} | ${s.absentDays} | ${s.totalHours} hrs | $${s.billableAmount.toFixed(2)} | ${s.attendanceScore}%\n`;
+      });
 
-    pdfText += `\n----------------------------------------------------------------------------------------------------\n`;
-    pdfText += `End of Report - Vergil Tempo Workforce Audit Engine\n`;
+      pdfText += `\n----------------------------------------------------------------------------------------------------\n`;
+      pdfText += `End of Report - Vergil Tempo Workforce Audit Engine\n`;
 
-    const blob = new Blob([pdfText], { type: 'text/plain;charset=utf-8' });
-    triggerBlobDownload(blob, `Vergil_Tempo_Workforce_Audit_${yearMonth}.txt`);
+      const blob = new Blob([pdfText], { type: 'application/pdf' });
+      triggerBlobDownload(blob, `Vergil_Tempo_Workforce_Audit_${yearMonth}.pdf`);
+    } else {
+      const [yearStr, monthStr] = yearMonth.split('-');
+      const response = await api.get('/reports/workforce-summary-pdf', {
+        params: { year: parseInt(yearStr), month: parseInt(monthStr), clientId },
+        responseType: 'blob',
+      });
+      triggerBlobDownload(response.data, `Vergil_Tempo_Workforce_Audit_${yearMonth}.pdf`);
+    }
   },
 };
 

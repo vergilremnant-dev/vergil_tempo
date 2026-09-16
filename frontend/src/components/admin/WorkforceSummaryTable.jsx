@@ -41,10 +41,15 @@ export default function WorkforceSummaryTable({ setToast }) {
     if (setToast) setToast({ message: 'Master Workforce CSV exported.', type: 'success' });
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!summaryData || !summaryData.summaries) return;
-    timesheetService.exportWorkforceSummaryPDF(summaryData, yearMonthStr);
-    if (setToast) setToast({ message: 'Master Workforce Audit Report exported.', type: 'success' });
+    try {
+      await timesheetService.exportWorkforceSummaryPDF(summaryData, yearMonthStr, selectedClient);
+      if (setToast) setToast({ message: 'Master Workforce Audit Report PDF downloaded.', type: 'success' });
+    } catch (err) {
+      console.error(err);
+      if (setToast) setToast({ message: 'Failed to generate PDF report.', type: 'error' });
+    }
   };
 
   const filteredSummaries = (summaryData?.summaries || []).filter((s) => {
