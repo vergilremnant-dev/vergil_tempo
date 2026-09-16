@@ -1,7 +1,8 @@
-const CACHE_NAME = 'vt-cache-v3';
+const CACHE_NAME = 'vt-cache-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/manifest.json',
   '/favicon.png',
   '/icon-192.png',
   '/icon-512.png'
