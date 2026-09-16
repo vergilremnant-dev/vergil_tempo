@@ -1150,7 +1150,7 @@ export const timesheetService = {
   },
 
   exportWorkforceSummaryCSV: (data, yearMonth) => {
-    const headers = ['Employee Name', 'Username', 'Client MNC', 'Working Days', 'Present Days', 'Leave Days', 'Absent Days', 'Total Hours', 'Rate ($/hr)', 'Billable Total ($)', 'Late Count', 'Early Leave', 'Score (%)'];
+    const headers = ['Employee Name', 'Username', 'Client MNC', 'Working Days', 'Present Days', 'Leave Days', 'Absent Days', 'Total Hours', 'Late Count', 'Early Leave'];
     let csvContent = headers.join(',') + '\n';
 
     data.summaries.forEach((s) => {
@@ -1163,11 +1163,8 @@ export const timesheetService = {
         s.leaveDays,
         s.absentDays,
         s.totalHours,
-        s.hourlyRate.toFixed(2),
-        s.billableAmount.toFixed(2),
         s.lateCount,
         s.earlyLeaveCount,
-        `${s.attendanceScore}%`,
       ];
       csvContent += row.join(',') + '\n';
     });
@@ -1182,11 +1179,11 @@ export const timesheetService = {
       pdfText += `Generated At: ${new Date().toLocaleString()}\n`;
       pdfText += `----------------------------------------------------------------------------------------------------\n\n`;
 
-      pdfText += `Employee Name | Client MNC | Working Days | Present | Leave | Absent | Total Hours | Billable ($) | Score\n`;
+      pdfText += `Employee Name | Client MNC | Working Days | Present | Leave | Absent | Total Hours\n`;
       pdfText += `----------------------------------------------------------------------------------------------------\n`;
 
       data.summaries.forEach((s) => {
-        pdfText += `${s.name} | ${s.clientCompany} | ${s.totalWorkingDays} | ${s.presentDays} | ${s.leaveDays} | ${s.absentDays} | ${s.totalHours} hrs | $${s.billableAmount.toFixed(2)} | ${s.attendanceScore}%\n`;
+        pdfText += `${s.name} | ${s.clientCompany} | ${s.totalWorkingDays} | ${s.presentDays} | ${s.leaveDays} | ${s.absentDays} | ${s.totalHours} hrs\n`;
       });
 
       pdfText += `\n----------------------------------------------------------------------------------------------------\n`;

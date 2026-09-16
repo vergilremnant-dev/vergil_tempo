@@ -115,15 +115,13 @@ export async function GET(req: NextRequest) {
     // Table Column Headers
     let currentY = 125;
     const columns = [
-      { label: "Employee Name", width: 140, align: "left" },
-      { label: "Client MNC", width: 110, align: "left" },
-      { label: "Working Days", width: 80, align: "center" },
-      { label: "Present", width: 65, align: "center" },
-      { label: "Leave", width: 65, align: "center" },
-      { label: "Absent", width: 65, align: "center" },
-      { label: "Total Hours", width: 80, align: "right" },
-      { label: "Billable Total", width: 95, align: "right" },
-      { label: "Score", width: 80, align: "center" },
+      { label: "Employee Name", width: 180, align: "left" },
+      { label: "Client MNC", width: 140, align: "left" },
+      { label: "Working Days", width: 100, align: "center" },
+      { label: "Present", width: 90, align: "center" },
+      { label: "Leave", width: 90, align: "center" },
+      { label: "Absent", width: 90, align: "center" },
+      { label: "Total Hours", width: 92, align: "right" },
     ];
 
     doc.rect(30, currentY, 782, 22).fill("#111111");
@@ -138,7 +136,6 @@ export async function GET(req: NextRequest) {
     currentY += 22;
 
     let totalWorkforceHours = 0;
-    let totalWorkforceBillable = 0;
 
     employees.forEach((emp, index) => {
       const empTimesheets = timesheets.filter((t) => t.user_id === emp.id);
@@ -164,12 +161,8 @@ export async function GET(req: NextRequest) {
 
       const totalHours = empTimesheets.reduce((sum, t) => sum + Number(t.hours || 0), 0);
       const absentDays = Math.max(0, totalWorkingDays - (presentDays + leaveDays));
-      const hourlyRate = Number(emp.hourly_rate || 0);
-      const billableAmount = totalHours * hourlyRate;
-      const attendanceScore = Math.min(100, Math.round(((presentDays + leaveDays) / Math.max(1, totalWorkingDays)) * 100));
 
       totalWorkforceHours += totalHours;
-      totalWorkforceBillable += billableAmount;
 
       // Alternating row background
       if (index % 2 === 1) {
@@ -188,8 +181,6 @@ export async function GET(req: NextRequest) {
         `${leaveDays}`,
         `${absentDays}`,
         `${totalHours.toFixed(1)} hrs`,
-        `$${billableAmount.toFixed(2)}`,
-        `${attendanceScore}%`,
       ];
 
       rowValues.forEach((val, colIdx) => {
@@ -200,15 +191,11 @@ export async function GET(req: NextRequest) {
         if (colIdx === 3) textColor = "#059669"; // Present (Green)
         if (colIdx === 4) textColor = "#2563EB"; // Leave (Blue)
         if (colIdx === 5 && absentDays > 0) textColor = "#DC2626"; // Absent (Red)
-        if (colIdx === 7) textFont = "Helvetica-Bold"; // Billable
-        if (colIdx === 8) {
-          textFont = "Helvetica-Bold";
-          textColor = attendanceScore >= 95 ? "#059669" : attendanceScore >= 85 ? "#D97706" : "#DC2626";
-        }
+        if (colIdx === 6) textFont = "Helvetica-Bold"; // Hours
 
         doc
           .font(textFont)
-          .fontSize(8)
+          .fontSize(8.5)
           .fillColor(textColor)
           .text(val, rowX + 5, currentY + 6, { width: col.width - 10, align: col.align as any });
         rowX += col.width;
@@ -236,10 +223,9 @@ export async function GET(req: NextRequest) {
     currentY += 5;
     doc.rect(30, currentY, 782, 22).fill("#F3F4F6");
     doc.font("Helvetica-Bold").fontSize(9).fillColor("#111111");
-    doc.text("WORKFORCE TOTALS", 40, currentY + 7);
+    doc.text("WORKFORCE CUMULATIVE TOTAL HOURS", 40, currentY + 7);
 
-    doc.text(`${totalWorkforceHours.toFixed(1)} hrs`, 555, currentY + 7, { width: 80, align: "right" });
-    doc.fillColor("#059669").text(`$${totalWorkforceBillable.toFixed(2)}`, 650, currentY + 7, { width: 95, align: "right" });
+    doc.text(`${totalWorkforceHours.toFixed(1)} hrs`, 720, currentY + 7, { width: 90, align: "right" });
 
     doc.end();
 
